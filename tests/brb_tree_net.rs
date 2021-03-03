@@ -42,7 +42,7 @@ mod tests {
         // Initiate the signing round DSB but don't deliver signatures
         let pending_packets = net
             .on_proc(&actor, |proc| {
-                proc.exec_op(proc.dt.opmove(root_id, "Hello".to_string(), 1))
+                proc.exec_op(proc.dt.opmovetx(root_id, "Hello".to_string(), 1))
                     .unwrap()
             })
             .unwrap()
@@ -53,7 +53,7 @@ mod tests {
         // Initiate the signing round again but for a different op (adding World instead of Hello)
         let invalid_pending_packets_cnt = net
             .on_proc(&actor, |proc| {
-                proc.exec_op(proc.dt.opmove(root_id, "World".to_string(), 2))
+                proc.exec_op(proc.dt.opmovetx(root_id, "World".to_string(), 2))
                     .unwrap()
             })
             .unwrap()
@@ -92,7 +92,7 @@ mod tests {
         // initiating process 'a' broadcasts requests for validation
         let req_for_valid_packets = net
             .on_proc(&a, |p| {
-                p.exec_op(p.dt.opmove(root_id, "32".to_string(), child_id))
+                p.exec_op(p.dt.opmovetx(root_id, "32".to_string(), child_id))
                     .unwrap()
             })
             .unwrap();
@@ -137,7 +137,7 @@ mod tests {
             let actors_loop = net.actors().into_iter().collect::<Vec<_>>().into_iter().cycle();
             for (actor, member) in actors_loop.zip(members.clone().into_iter()) {
                 net.run_packets_to_completion(
-                    net.on_proc(&actor, |p| p.exec_op(p.dt.opmove(root_id, member.to_string(), member)).unwrap()).unwrap()
+                    net.on_proc(&actor, |p| p.exec_op(p.dt.opmovetx(root_id, member.to_string(), member)).unwrap()).unwrap()
                 )
             }
 
@@ -185,7 +185,7 @@ mod tests {
             for (actor, member) in actors_loop.zip(members.into_iter()) {
                 model.add_node(member, TreeNode::new(root_id, member.to_string()));
                 net.run_packets_to_completion(
-                    net.on_proc(&actor, |p| p.exec_op(p.dt.opmove(root_id, member.to_string(), member)).unwrap()).unwrap()
+                    net.on_proc(&actor, |p| p.exec_op(p.dt.opmovetx(root_id, member.to_string(), member)).unwrap()).unwrap()
                 )
             }
 
@@ -284,7 +284,7 @@ mod tests {
                         let op = model.opmove(0, v.to_string(), v);
                         model.apply_op(op);
 
-                        for packet in net.on_proc(&actor, |p| p.exec_op(p.dt.opmove(root_id, v.to_string(), v)).unwrap()).unwrap() {
+                        for packet in net.on_proc(&actor, |p| p.exec_op(p.dt.opmovetx(root_id, v.to_string(), v)).unwrap()).unwrap() {
                             for resp_packet in net.deliver_packet(packet) {
                                 let queue = (resp_packet.source, resp_packet.dest);
                                 packet_queues

@@ -15,6 +15,9 @@ use serde::Serialize;
 use std::{fmt::Debug, hash::Hash};
 use thiserror::Error;
 
+/// OpMoveTx
+pub type OpMoveTx<ID, M, A> = Vec<OpMove<ID, M, A>>;
+
 /// A BRBDataType wrapper around crdt_tree::State
 #[derive(Debug, Serialize, PartialEq, Eq, Clone)]
 pub struct BRBTree<A: Clone + Hash + Ord + Debug, ID: TreeId, M: TreeMeta> {
@@ -22,10 +25,25 @@ pub struct BRBTree<A: Clone + Hash + Ord + Debug, ID: TreeId, M: TreeMeta> {
     treereplica: TreeReplica<ID, M, A>,
 }
 
-impl<A: Clone + Hash + Ord + Debug, ID: TreeId, M: TreeMeta> BRBTree<A, ID, M> {
-    /// generates a move operation.  (crdt_tree::OpMove)
+impl<
+        A: Hash + Ord + Clone + Debug + Serialize + 'static,
+        ID: TreeId + Debug + Serialize,
+        M: TreeMeta + Eq + Debug + Hash + Serialize,
+    > BRBTree<A, ID, M>
+{
+    /// generates an OpMove.  ie a single tree op.
     pub fn opmove(&self, parent: ID, meta: M, child: ID) -> OpMove<ID, M, A> {
         self.treereplica.opmove(parent, meta, child)
+    }
+
+    /// generates an OpMoveTx containing 1 tree op
+    pub fn opmovetx(&self, parent: ID, meta: M, child: ID) -> OpMoveTx<ID, M, A> {
+        self.treereplica.opmoves(vec![(parent, meta, child)])
+    }
+
+    /// generates an OpMoveTx containing N tree ops, each with successive timestamp
+    pub fn opmovetx_multi(&self, ops: Vec<(ID, M, ID)>) -> OpMoveTx<ID, M, A> {
+        self.treereplica.opmoves(ops)
     }
 
     /// returns the actor
@@ -42,6 +60,18 @@ impl<A: Clone + Hash + Ord + Debug, ID: TreeId, M: TreeMeta> BRBTree<A, ID, M> {
     pub fn treereplica(&self) -> &TreeReplica<ID, M, A> {
         &self.treereplica
     }
+
+    fn validate_opmove(
+        &self,
+        source: &A,
+        op: &OpMove<ID, M, A>,
+    ) -> Result<(), <BRBTree<A, ID, M> as BRBDataType<A>>::ValidationError> {
+        if op.timestamp().actor_id() != source {
+            Err(ValidationError::SourceDoesNotMatchOp)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /// An enumeration of possible Validation Errors
@@ -57,7 +87,7 @@ impl<
         M: TreeMeta + Eq + Debug + Hash + Serialize,
     > BRBDataType<A> for BRBTree<A, ID, M>
 {
-    type Op = OpMove<ID, M, A>;
+    type Op = OpMoveTx<ID, M, A>;
     type ValidationError = ValidationError;
 
     /// Create a new BRBTree
@@ -69,16 +99,17 @@ impl<
     }
 
     /// Validate an operation.
-    fn validate(&self, source: &A, op: &Self::Op) -> Result<(), Self::ValidationError> {
-        if op.timestamp().actor_id() != source {
-            Err(ValidationError::SourceDoesNotMatchOp)
-        } else {
-            Ok(())
+    fn validate(&self, source: &A, op_tx: &Self::Op) -> Result<(), Self::ValidationError> {
+        for op in op_tx {
+            self.validate_opmove(source, op)?;
         }
+        Ok(())
     }
 
     /// Apply an operation to the underlying Tree datatype
-    fn apply(&mut self, op: Self::Op) {
-        self.treereplica.apply_op(op);
+    fn apply(&mut self, op_tx: Self::Op) {
+        for op in op_tx {
+            self.treereplica.apply_op(op);
+        }
     }
 }

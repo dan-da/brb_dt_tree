@@ -15,4 +15,4 @@
 #![deny(missing_docs)]
 
 mod brb_tree;
-pub use brb_tree::BRBTree;
+pub use brb_tree::{BRBTree, OpMoveTx};
